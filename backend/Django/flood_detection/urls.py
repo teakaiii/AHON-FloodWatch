@@ -3,7 +3,7 @@ URL configuration for flood_detection project.
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.shortcuts import redirect
+from django.http import HttpResponse
 from rest_framework import permissions
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -60,9 +60,17 @@ def api_root(request):
         }
     })
 
+
+def project_root(request):
+    """Simple public landing page for the backend service."""
+    return HttpResponse(
+        "<html><body><h1>AHON FloodWatch</h1><p>Backend API is running.</p><p>Use /api/ for API endpoints.</p></body></html>",
+        content_type="text/html",
+    )
+
 urlpatterns = [
-    # Root URL - Welcome page
-    path('', lambda request: redirect('/api/')),
+    # Root URL - public landing page
+    path('', project_root),
     
     path('admin/', admin.site.urls),
     

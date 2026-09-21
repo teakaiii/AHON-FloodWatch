@@ -62,7 +62,7 @@ def api_root(request):
 
 urlpatterns = [
     # Root URL - Welcome page
-    path('', lambda request: redirect('admin/')),
+    path('', lambda request: redirect('/api/')),
     
     path('admin/', admin.site.urls),
     

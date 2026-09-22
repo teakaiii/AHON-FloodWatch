@@ -2,6 +2,9 @@
 Views for Water Level module.
 """
 import math
+import json
+import logging
+from urllib.request import Request, urlopen
 
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
@@ -21,6 +24,8 @@ from .serializers import (
 
 VALID_SENSOR_STATUSES = {'online', 'offline', 'error'}
 VALID_GSM_STATUSES = {'connected', 'disconnected', 'error'}
+logger = logging.getLogger(__name__)
+RENDER_SENSOR_ENDPOINT = 'https://ahon-floodwatch-backend.onrender.com/api/water-level/'
 
 
 def derive_status_from_analog(raw_value):
@@ -195,6 +200,31 @@ def water_level_root_create_view(request):
         gsm_status=sanitized.get('gsm_status', 'connected'),
         firebase_synced=False,
     )
+
+    # SIM900 uses the HTTP ngrok tunnel. Forward only from local DEBUG mode so
+    # the Render deployment never forwards to itself.
+    from django.conf import settings
+    if settings.DEBUG:
+        try:
+            forward_payload = {
+                'raw': sanitized.get('raw'),
+                'water_level_cm': float(sanitized['water_level_cm']),
+                'status': sanitized['status'],
+                'sensor_status': sanitized.get('sensor_status', 'online'),
+                'gsm_status': sanitized.get('gsm_status', 'connected'),
+                'timestamp': reading.timestamp.isoformat(),
+            }
+            forward_request = Request(
+                RENDER_SENSOR_ENDPOINT,
+                data=json.dumps(forward_payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+                method='POST',
+            )
+            with urlopen(forward_request, timeout=8) as forward_response:
+                if forward_response.status not in (200, 201):
+                    logger.warning('Render sensor forward returned HTTP %s', forward_response.status)
+        except Exception as forward_error:
+            logger.warning('Render sensor forward failed: %s', forward_error)
 
     serializer = WaterLevelReadingSerializer(reading)
     return Response(serializer.data, status=status.HTTP_201_CREATED)

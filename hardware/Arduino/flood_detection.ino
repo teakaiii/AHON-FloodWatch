@@ -1,6 +1,6 @@
 /*
  * AHON FloodWatch - Arduino Firmware (Memory-Optimized)
- * Corrected for SIM900/SIM800 GSM module stability & Render HTTPS delivery.
+ * Corrected for SIM900/SIM800 GSM module stability & HTTP ngrok delivery.
  */
 
 #include <SoftwareSerial.h>
@@ -22,7 +22,7 @@ SoftwareSerial gsmSerial(7, 8); // RX, TX
 // ----------------------
 // Backend URL & Phone
 // ----------------------
-const char SERVER_URL[] = "https://ahon-floodwatch-backend.onrender.com/api/water-level/";
+const char SERVER_URL[] = "http://aptitude-unpopular-demotion.ngrok-free.dev/api/water-level/";
 const char RECIPIENT_PHONE[] = "+639077650549";
 
 // ----------------------
@@ -198,7 +198,6 @@ void sendHTTPData(int rawValue, float waterLevelCm, const char* status) {
 
   sendATCommand("AT+HTTPTERM", 1000);
   sendATCommand("AT+HTTPINIT", 2000);
-  sendATCommand("AT+HTTPSSL=1", 3000);
   sendATCommand("AT+HTTPPARA=\"CID\",1", 2000);
   sendATCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 2000);
 

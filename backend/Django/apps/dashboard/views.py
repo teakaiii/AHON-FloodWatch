@@ -94,6 +94,10 @@ def dashboard_overview_view(request):
         'sms_enabled': django_settings.SMS_ENABLED if hasattr(django_settings, 'SMS_ENABLED') else True,
         'last_reading_time': current_reading.timestamp if current_reading else None
     }
+    reading_age_seconds = max(
+        0,
+        int((timezone.now() - current_reading.timestamp).total_seconds())
+    ) if current_reading else None
 
     data = {
         'current_water_level': {
@@ -102,7 +106,10 @@ def dashboard_overview_view(request):
             'status': current_reading.status if current_reading else 'No Data',
             'timestamp': current_reading.timestamp if current_reading else None,
             'sensor_status': current_reading.sensor_status if current_reading else 'unknown',
-            'gsm_status': current_reading.gsm_status if current_reading else 'unknown'
+            'gsm_status': current_reading.gsm_status if current_reading else 'unknown',
+            'source': 'arduino_upload' if current_reading and not current_reading.firebase_synced else 'firebase_sensor',
+            'age_seconds': reading_age_seconds,
+            'is_live': bool(current_reading and current_reading.sensor_status == 'online' and reading_age_seconds <= 30),
         },
         'alerts': {
             'active_count': active_alerts,

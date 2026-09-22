@@ -269,6 +269,9 @@ def latest_reading_api(request):
                 'source': 'no_sensor_data',
             }, status=status.HTTP_200_OK)
 
+        age_seconds = max(0, int((timezone.now() - reading.timestamp).total_seconds()))
+        is_live = reading.sensor_status == 'online' and age_seconds <= 30
+
         return Response({
             'raw': reading.raw,
             'water_level_cm': float(reading.water_level_cm),
@@ -277,6 +280,8 @@ def latest_reading_api(request):
             'gsm_status': reading.gsm_status,
             'timestamp': reading.timestamp.isoformat(),
             'source': 'arduino_upload' if not reading.firebase_synced else 'firebase_sensor',
+            'age_seconds': age_seconds,
+            'is_live': is_live,
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response(

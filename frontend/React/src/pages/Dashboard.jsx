@@ -124,6 +124,9 @@ const Dashboard = () => {
           sensor_status: latest.sensor_status,
           gsm_status: latest.gsm_status,
           timestamp: latest.timestamp,
+          source: latest.source,
+          age_seconds: latest.age_seconds,
+          is_live: latest.is_live === true,
         }
 
         setAlertHistory((prev) => {
@@ -368,6 +371,16 @@ const Dashboard = () => {
                     Last Arduino update: {dashboardData?.current_water_level?.timestamp
                       ? new Date(dashboardData.current_water_level.timestamp).toLocaleTimeString()
                       : 'No reading'}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color={dashboardData?.current_water_level?.is_live ? 'success.main' : 'error.main'}
+                    display="block"
+                    sx={{ fontWeight: 700, mt: 0.25 }}
+                  >
+                    {dashboardData?.current_water_level?.is_live
+                      ? 'LIVE FROM ARDUINO'
+                      : 'STALE: WAITING FOR ARDUINO'}
                   </Typography>
                   <Chip
                     label={dashboardData?.current_water_level?.status || 'Unknown'}

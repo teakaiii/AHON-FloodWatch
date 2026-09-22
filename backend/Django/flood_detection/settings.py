@@ -201,17 +201,18 @@ SIMPLE_JWT = {
 
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://aptitude-unpopular-demotion.ngrok-free.dev",
-    "http://aptitude-unpopular-demotion.ngrok-free.dev",
-]
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://aptitude-unpopular-demotion.ngrok-free.dev,http://aptitude-unpopular-demotion.ngrok-free.dev'
+).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
+
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://aptitude-unpopular-demotion.ngrok-free.dev,http://aptitude-unpopular-demotion.ngrok-free.dev'
+).split(',')
 
 
 # Firebase Configuration

@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: ahon-floodwatch-backend
+    env: python
+    rootDir: backend/Django
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+    startCommand: gunicorn flood_detection.wsgi:application --bind 0.0.0.0:$PORT
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "*.onrender.com,localhost,127.0.0.1"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://ahon-floodwatch-frontend.onrender.com,http://localhost:5173,http://127.0.0.1:5173"
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: "False"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://ahon-floodwatch-frontend.onrender.com,http://localhost:5173,http://127.0.0.1:5173"
+      - key: JWT_ACCESS_TOKEN_LIFETIME
+        value: "60"
+      - key: JWT_REFRESH_TOKEN_LIFETIME
+        value: "1440"
+
+  - type: static
+    name: ahon-floodwatch-frontend
+    rootDir: frontend/React
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: false
+    plan: free
+    envVars:
+      - key: VITE_API_URL
+        value: "https://ahon-floodwatch-backend.onrender.com"

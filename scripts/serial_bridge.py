@@ -76,10 +76,11 @@ class BridgeConfig:
 class APIClient:
     """Thin client that keeps a JWT alive and posts readings."""
 
-    def __init__(self, base_url, username, password):
+    def __init__(self, base_url, username, password, public_ingest=False):
         self.base_url = base_url.rstrip("/")
         self.username = username
         self.password = password
+        self.public_ingest = public_ingest
         self.access = None
         self.refresh = None
 
@@ -108,7 +109,18 @@ class APIClient:
 
     def post_reading(self, reading):
         """POST one reading, retrying once after re-auth. Returns True on success."""
-        url = f"{self.base_url}/api/water-level/readings/create/"
+        url = f"{self.base_url}/api/water-level/" if self.public_ingest else f"{self.base_url}/api/water-level/readings/create/"
+
+        if self.public_ingest:
+            try:
+                resp = requests.post(url, json=reading, timeout=10)
+            except requests.RequestException as exc:
+                logger.warning("POST failed: %s", exc)
+                return False
+            if resp.status_code in (200, 201):
+                return True
+            logger.error("Public ingestion rejected reading (%s): %s", resp.status_code, resp.text[:300])
+            return False
 
         for attempt in (1, 2):
             if not self.access:
@@ -141,6 +153,14 @@ class APIClient:
 
 def autodetect_port():
     """Return the single obvious serial port, or None."""
+    try:
+        from serial.tools import list_ports
+        detected = [port.device for port in list_ports.comports()]
+        if detected:
+            return sorted(detected)[0]
+    except ImportError:
+        pass
+
     found = []
     for pattern in PORT_GLOBS:
         found.extend(glob.glob(pattern))
@@ -316,6 +336,11 @@ def main():
     parser.add_argument("--username", default=os.environ.get("FLOODWATCH_USER", "admin"))
     parser.add_argument("--password", default=os.environ.get("FLOODWATCH_PASSWORD"))
     parser.add_argument(
+        "--public-ingest",
+        action="store_true",
+        help="POST directly to the public AllowAny /api/water-level/ endpoint (no login required)",
+    )
+    parser.add_argument(
         "--min-interval",
         type=float,
         default=10.0,
@@ -350,17 +375,18 @@ def main():
         datefmt="%H:%M:%S",
     )
 
-    if not args.password:
+    if not args.public_ingest and not args.password:
         parser.error("--password is required (or set FLOODWATCH_PASSWORD)")
 
     cfg = BridgeConfig(args)
-    client = APIClient(args.api, args.username, args.password)
-    try:
-        client.login()
-    except (RuntimeError, requests.RequestException) as exc:
-        logger.error("%s", exc)
-        logger.error("Is the backend running?  cd backend/Django && .venv/bin/python manage.py runserver 8000")
-        return 1
+    client = APIClient(args.api, args.username, args.password, args.public_ingest)
+    if not args.public_ingest:
+        try:
+            client.login()
+        except (RuntimeError, requests.RequestException) as exc:
+            logger.error("%s", exc)
+            logger.error("Is the backend running?  cd backend/Django && .venv/bin/python manage.py runserver 8000")
+            return 1
 
     if args.simulate:
         source = simulated_lines(min(args.min_interval, 5.0))

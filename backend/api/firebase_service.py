@@ -184,6 +184,7 @@ class FirebaseService:
 
             # Create new reading
             reading = WaterLevelReading.objects.create(
+                raw=int(sanitized['raw']) if sanitized.get('raw') is not None else None,
                 water_level_cm=water_level_cm,
                 status=status,
                 timestamp=timestamp,

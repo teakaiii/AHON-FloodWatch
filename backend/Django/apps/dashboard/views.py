@@ -97,6 +97,7 @@ def dashboard_overview_view(request):
 
     data = {
         'current_water_level': {
+            'raw': current_reading.raw,
             'water_level_cm': float(current_reading.water_level_cm) if current_reading else 0,
             'status': current_reading.status if current_reading else 'No Data',
             'timestamp': current_reading.timestamp if current_reading else None,

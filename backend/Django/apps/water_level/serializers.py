@@ -12,7 +12,7 @@ class WaterLevelReadingSerializer(serializers.ModelSerializer):
     class Meta:
         model = WaterLevelReading
         fields = [
-            'reading_id', 'water_level_cm', 'status', 'timestamp',
+            'reading_id', 'raw', 'water_level_cm', 'status', 'timestamp',
             'sensor_status', 'gsm_status', 'firebase_synced', 'created_at'
         ]
         read_only_fields = ['reading_id', 'created_at']
@@ -25,7 +25,7 @@ class WaterLevelReadingCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WaterLevelReading
         fields = [
-            'water_level_cm', 'status', 'timestamp',
+            'raw', 'water_level_cm', 'status', 'timestamp',
             'sensor_status', 'gsm_status'
         ]
     
@@ -44,6 +44,7 @@ class CurrentWaterLevelSerializer(serializers.Serializer):
     Serializer for current water level data.
     """
     reading_id = serializers.UUIDField()
+    raw = serializers.IntegerField(allow_null=True)
     water_level_cm = serializers.DecimalField(max_digits=5, decimal_places=2)
     status = serializers.CharField()
     timestamp = serializers.DateTimeField()

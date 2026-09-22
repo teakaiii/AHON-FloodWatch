@@ -157,7 +157,7 @@ class WaterLevelAPITest(TestCase):
 
     def test_sanitize_incoming_water_level_payload_matches_arduino_thresholds(self):
         """Raw analog values must map to the same thresholds used by the Arduino sketch."""
-        for raw_value, expected_status in [(150, 'Normal'), (200, 'Warning'), (399, 'Warning'), (400, 'Danger')]:
+        for raw_value, expected_status in [(150, 'Normal'), (299, 'Normal'), (300, 'Warning'), (399, 'Warning'), (400, 'Danger')]:
             payload = {
                 'raw': raw_value,
                 'sensor_status': 'online',

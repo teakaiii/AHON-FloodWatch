@@ -30,6 +30,7 @@ class WaterLevelReading(models.Model):
     ]
     
     reading_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    raw = models.PositiveSmallIntegerField(null=True, blank=True)
     water_level_cm = models.DecimalField(max_digits=5, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
     timestamp = models.DateTimeField()
@@ -64,7 +65,7 @@ class WaterLevelReading(models.Model):
         except (TypeError, ValueError):
             return 'Normal'
 
-        if value >= 550:
+        if value >= 400:
             return 'Danger'
         if value >= 300:
             return 'Warning'

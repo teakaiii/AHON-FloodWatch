@@ -1,6 +1,6 @@
 /*
- * AHON FloodWatch - Arduino Firmware
- * Corrected for real-time water level updates and Django payload compatibility.
+ * AHON FloodWatch - Arduino Firmware (Memory-Optimized)
+ * Corrected for SIM900/SIM800 GSM module stability & Ngrok HTTP delivery.
  */
 
 #include <SoftwareSerial.h>
@@ -12,46 +12,44 @@ const int SENSOR_PIN = A0;
 const int LED_GREEN  = 13;
 const int LED_YELLOW = 12;
 const int LED_RED    = 11;
+const bool LED_ACTIVE_HIGH = true;
 
 // ----------------------
 // GSM/GPRS
 // ----------------------
-SoftwareSerial gsmSerial(7, 8);
+SoftwareSerial gsmSerial(7, 8); // RX, TX
 
 // ----------------------
-// Backend URL
-// Use your deployed Render backend URL with the actual API route.
+// Backend URL & Phone
 // ----------------------
-const String SERVER_URL = "https://ahon-floodwatch-backend.onrender.com/api/water-level/";
-String RECIPIENT_PHONE = "+639077650549";
+const char SERVER_URL[] = "http://aptitude-unpopular-demotion.ngrok-free.dev/api/water-level/";
+const char RECIPIENT_PHONE[] = "+639077650549";
 
 // ----------------------
 // Thresholds (RAW ADC values)
-// These must match Django backend validation.
 // ----------------------
 const int THRESHOLD_WARNING = 300;
-const int THRESHOLD_DANGER = 550;
+const int THRESHOLD_DANGER = 400;
 const float MAX_CM = 100.0;
 
 // ----------------------
 // Timing
 // ----------------------
-const unsigned long READ_INTERVAL_MS = 5000;
-const unsigned long SMS_COOLDOWN_MS = 60000;
-const unsigned long HTTP_DELAY_MS = 2000;
+const unsigned long READ_INTERVAL_MS = 10000; // Increased to 10s for stability
+const unsigned long SMS_COOLDOWN_MS  = 60000;
+const unsigned long GPRS_RETRY_INTERVAL_MS = 30000;
 
 unsigned long lastReadTime = 0;
-unsigned long lastUploadTime = 0;
 unsigned long lastSmsTime = 0;
-
-String currentStatus = "Normal";
+unsigned long lastGprsRetryTime = 0;
+bool gprsReady = false;
 
 float rawToCm(int rawValue) {
   rawValue = constrain(rawValue, 0, 1023);
   return (rawValue / 1023.0) * MAX_CM;
 }
 
-String determineStatusFromRaw(int rawValue) {
+const char* determineStatusFromRaw(int rawValue) {
   if (rawValue < THRESHOLD_WARNING) {
     return "Normal";
   } else if (rawValue < THRESHOLD_DANGER) {
@@ -69,13 +67,15 @@ void setup() {
   pinMode(LED_YELLOW, OUTPUT);
   pinMode(LED_RED, OUTPUT);
 
-  digitalWrite(LED_GREEN, LOW);
-  digitalWrite(LED_YELLOW, LOW);
-  digitalWrite(LED_RED, LOW);
+  writeLed(LED_GREEN, false);
+  writeLed(LED_YELLOW, false);
+  writeLed(LED_RED, false);
 
-  Serial.println("====================================");
-  Serial.println("AHON FloodWatch - Arduino Sensor");
-  Serial.println("====================================");
+  testLeds();
+
+  Serial.println(F("===================================="));
+  Serial.println(F("AHON FloodWatch - Arduino Sensor"));
+  Serial.println(F("===================================="));
 
   delay(2000);
   initGSM();
@@ -85,199 +85,171 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
-  if (now - lastReadTime >= READ_INTERVAL_MS) {
+  // Retry GPRS configuration if connection failed earlier
+  if (!gprsReady && (now - lastGprsRetryTime >= GPRS_RETRY_INTERVAL_MS)) {
+    lastGprsRetryTime = now;
+    setupGPRS();
+  }
+
+  if (lastReadTime == 0 || (now - lastReadTime >= READ_INTERVAL_MS)) {
     lastReadTime = now;
 
     int rawValue = analogRead(SENSOR_PIN);
     float waterLevelCm = rawToCm(rawValue);
-    String status = determineStatusFromRaw(rawValue);
+    const char* status = determineStatusFromRaw(rawValue);
 
-    currentStatus = status;
-
-    Serial.print("RAW=");
+    Serial.print(F("RAW="));
     Serial.print(rawValue);
-    Serial.print(" | CM=");
+    Serial.print(F(" | CM="));
     Serial.print(waterLevelCm, 2);
-    Serial.print(" | STATUS=");
+    Serial.print(F(" | STATUS="));
     Serial.println(status);
 
-    if (rawValue < THRESHOLD_WARNING) {
-      digitalWrite(LED_GREEN, HIGH);
-      digitalWrite(LED_YELLOW, LOW);
-      digitalWrite(LED_RED, LOW);
-    } else if (rawValue < THRESHOLD_DANGER) {
-      digitalWrite(LED_GREEN, LOW);
-      digitalWrite(LED_YELLOW, HIGH);
-      digitalWrite(LED_RED, LOW);
-    } else {
-      digitalWrite(LED_GREEN, LOW);
-      digitalWrite(LED_YELLOW, LOW);
-      digitalWrite(LED_RED, HIGH);
-    }
+    updateStatusLeds(rawValue);
 
-    if ((status == "Warning" || status == "Danger") &&
+    // SMS Alert Logic
+    if ((strcmp(status, "Warning") == 0 || strcmp(status, "Danger") == 0) &&
         (now - lastSmsTime >= SMS_COOLDOWN_MS)) {
-      Serial.println("Sending SMS alert...");
-      sendSMS("BARANGAY TONSUYA FLOOD " + status + " - Water level: " + String(waterLevelCm, 2) + " cm");
-      lastSmsTime = now;
-      delay(HTTP_DELAY_MS);
+      Serial.println(F("Sending SMS alert..."));
+      String smsMessage = "BARANGAY TONSUYA FLOOD ";
+      smsMessage += status;
+      smsMessage += " - Water level: ";
+      smsMessage += String(waterLevelCm, 2);
+      smsMessage += " cm";
+      
+      if (sendSMS(smsMessage)) {
+        lastSmsTime = now;
+      }
+      delay(2000);
     }
 
-    if (now - lastUploadTime >= READ_INTERVAL_MS) {
-      lastUploadTime = now;
-      sendHTTPData(rawValue, waterLevelCm, status);
-    }
+    // HTTP Payload Transmission
+    sendHTTPData(rawValue, waterLevelCm, status);
   }
 
   delay(200);
 }
 
+void writeLed(int pin, bool on) {
+  bool outputHigh = LED_ACTIVE_HIGH ? on : !on;
+  digitalWrite(pin, outputHigh ? HIGH : LOW);
+}
+
+void updateStatusLeds(int rawValue) {
+  writeLed(LED_GREEN, rawValue < THRESHOLD_WARNING);
+  writeLed(LED_YELLOW, rawValue >= THRESHOLD_WARNING && rawValue < THRESHOLD_DANGER);
+  writeLed(LED_RED, rawValue >= THRESHOLD_DANGER);
+}
+
+void testLeds() {
+  Serial.println(F("Testing status LEDs..."));
+  writeLed(LED_GREEN, true); delay(200); writeLed(LED_GREEN, false);
+  writeLed(LED_YELLOW, true); delay(200); writeLed(LED_YELLOW, false);
+  writeLed(LED_RED, true); delay(200); writeLed(LED_RED, false);
+}
+
 void initGSM() {
-  Serial.println("Initializing GSM...");
-
-  sendAT("AT", 1000);
-  sendAT("ATE0", 1000);
-  sendAT("AT+CMGF=1", 1000);
-
-  Serial.println("GSM ready");
+  Serial.println(F("Initializing GSM..."));
+  sendATCommand("AT", 1000);
+  sendATCommand("ATE0", 1000);
+  sendATCommand("AT+CMGF=1", 1000);
+  Serial.println(F("GSM initialized."));
 }
 
 void setupGPRS() {
-  Serial.println("Configuring GPRS...");
+  Serial.println(F("Configuring GPRS..."));
 
-  sendAT("AT+CGATT=1", 2000);
-  sendAT("AT+SAPBR=3,1,\"Contype\",\"GPRS\"", 2000);
-  sendAT("AT+SAPBR=3,1,\"APN\",\"internet\"", 2000);
-  sendAT("AT+SAPBR=3,1,\"USER\",\"\"", 2000);
-  sendAT("AT+SAPBR=3,1,\"PWD\",\"\"", 2000);
-  sendAT("AT+SAPBR=1,1", 5000);
-  sendAT("AT+SAPBR=2,1", 5000);
+  sendATCommand("AT+CSQ", 2000);
+  sendATCommand("AT+CREG?", 2000);
+  sendATCommand("AT+CGATT=1", 5000);
 
-  Serial.println("GPRS ready");
+  sendATCommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"", 2000);
+  sendATCommand("AT+SAPBR=3,1,\"APN\",\"internet\"", 2000);
+  sendATCommand("AT+SAPBR=1,1", 5000);
+  
+  String ipRes = sendATCommand("AT+SAPBR=2,1", 3000);
+
+  if (ipRes.indexOf("+SAPBR: 1,1") != -1) {
+    gprsReady = true;
+    Serial.println(F("GPRS is Ready!"));
+  } else {
+    gprsReady = false;
+    Serial.println(F("GPRS not ready. Check SIM, signal, APN, or Power Supply."));
+  }
 }
 
-String extractHttpStatusCode(String response) {
-  int startIndex = response.indexOf("+HTTPACTION:");
-  if (startIndex == -1) {
-    return "";
+void sendHTTPData(int rawValue, float waterLevelCm, const char* status) {
+  if (!gprsReady) {
+    Serial.println(F("Skipping HTTP upload because GPRS is not ready."));
+    return;
   }
 
-  int codeStart = response.indexOf(',', startIndex);
-  if (codeStart == -1) {
-    return "";
+  char payload[160];
+  char waterLevelText[10];
+  dtostrf(waterLevelCm, 1, 2, waterLevelText);
+
+  snprintf(payload, sizeof(payload),
+    "{\"raw\":%d,\"water_level_cm\":%s,\"status\":\"%s\",\"sensor_status\":\"online\"}",
+    rawValue, waterLevelText, status
+  );
+
+  Serial.print(F("Payload: "));
+  Serial.println(payload);
+
+  sendATCommand("AT+HTTPTERM", 1000);
+  sendATCommand("AT+HTTPINIT", 2000);
+  sendATCommand("AT+HTTPPARA=\"CID\",1", 2000);
+  sendATCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 2000);
+  sendATCommand("AT+HTTPPARA=\"USERDATA\",\"ngrok-skip-browser-warning: true\"", 2000);
+
+  String urlCmd = "AT+HTTPPARA=\"URL\",\"";
+  urlCmd += SERVER_URL;
+  urlCmd += "\"";
+  sendATCommand(urlCmd.c_str(), 2000);
+
+  String dataCmd = "AT+HTTPDATA=";
+  dataCmd += String(strlen(payload));
+  dataCmd += ",10000";
+
+  String dataRes = sendATCommand(dataCmd.c_str(), 3000);
+  if (dataRes.indexOf("DOWNLOAD") != -1) {
+    gsmSerial.print(payload);
+    delay(1000);
+    sendATCommand("AT+HTTPACTION=1", 10000);
+    sendATCommand("AT+HTTPREAD", 3000);
+  } else {
+    Serial.println(F("Failed to prepare HTTPDATA buffer."));
   }
 
-  int codeEnd = response.indexOf(',', codeStart + 1);
-  if (codeEnd == -1) {
-    codeEnd = response.indexOf('\r', codeStart + 1);
-  }
-
-  if (codeEnd == -1) {
-    return "";
-  }
-
-  String code = response.substring(codeStart + 1, codeEnd);
-  code.trim();
-  return code;
+  sendATCommand("AT+HTTPTERM", 1000);
 }
 
-String sendATAndRead(String command, int timeoutMs) {
+bool sendSMS(String message) {
+  gsmSerial.print(F("AT+CMGS=\""));
+  gsmSerial.print(RECIPIENT_PHONE);
+  gsmSerial.println(F("\""));
+  delay(1000);
+
+  gsmSerial.print(message);
+  gsmSerial.write(26); // Ctrl+Z to send
+  delay(5000);
+
+  Serial.println(F("SMS send triggered."));
+  return true;
+}
+
+String sendATCommand(const char* command, int timeoutMs) {
   gsmSerial.println(command);
   String response = "";
-  unsigned long startTime = millis();
+  unsigned long start = millis();
 
-  while (millis() - startTime < timeoutMs) {
+  while (millis() - start < timeoutMs) {
     while (gsmSerial.available()) {
       char c = gsmSerial.read();
       response += c;
       Serial.write(c);
     }
-
-    if (response.indexOf("+HTTPACTION:") != -1 ||
-        response.indexOf("OK") != -1 ||
-        response.indexOf("ERROR") != -1) {
-      break;
-    }
   }
-
+  Serial.println();
   return response;
-}
-
-void sendHTTPData(int rawValue, float waterLevelCm, String status) {
-  String payload = "{";
-  payload += "\"raw\":" + String(rawValue) + ",";
-  payload += "\"water_level_cm\":" + String(waterLevelCm, 2) + ",";
-  payload += "\"status\":\"" + status + "\",";
-  payload += "\"sensor_status\":\"online\",";
-  payload += "\"gsm_status\":\"connected\"";
-  payload += "}";
-
-  int payloadLength = payload.length();
-
-  Serial.println("Sending HTTP payload...");
-  Serial.println(payload);
-
-  sendATAndRead("AT+HTTPTERM", 1000);
-  sendATAndRead("AT+HTTPINIT", 2000);
-  sendATAndRead("AT+HTTPPARA=\"CID\",1", 2000);
-  sendATAndRead("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 2000);
-  sendATAndRead("AT+HTTPPARA=\"REDIR\",1", 2000);
-  sendATAndRead("AT+HTTPPARA=\"URL\",\"" + SERVER_URL + "\"", 3000);
-
-  Serial.print("Payload length: ");
-  Serial.println(payloadLength);
-
-  String prepareResponse = sendATAndRead("AT+HTTPDATA=" + String(payloadLength) + ",10000", 5000);
-  if (prepareResponse.indexOf("DOWNLOAD") == -1 && prepareResponse.indexOf("OK") == -1) {
-    Serial.println("HTTPDATA not ready. Modem may not be connected to the network.");
-    sendATAndRead("AT+HTTPTERM", 1000);
-    return;
-  }
-
-  gsmSerial.println(payload);
-  delay(1500);
-
-  String httpResponse = sendATAndRead("AT+HTTPACTION=1", 15000);
-  String statusCode = extractHttpStatusCode(httpResponse);
-
-  if (statusCode == "200" || statusCode == "201") {
-    Serial.println("HTTP upload successful");
-  } else {
-    Serial.println("HTTP upload failed. No successful modem response.");
-    Serial.print("HTTP Response: ");
-    Serial.println(httpResponse);
-    Serial.print("Parsed status code: ");
-    Serial.println(statusCode);
-    Serial.println("Expected: +HTTPACTION: 1,200,0 or +HTTPACTION: 1,201,0");
-    Serial.println("Check SIM data connection, APN, and public backend reachability.");
-  }
-
-  sendATAndRead("AT+HTTPTERM", 1000);
-}
-
-void sendSMS(String messageText) {
-  gsmSerial.print("AT+CMGS=\"");
-  gsmSerial.print(RECIPIENT_PHONE);
-  gsmSerial.println("\"");
-  delay(1000);
-
-  gsmSerial.print(messageText);
-  delay(500);
-
-  gsmSerial.write(26);
-  delay(4000);
-
-  Serial.println("SMS sent");
-}
-
-void sendAT(String command, int timeoutMs) {
-  gsmSerial.println(command);
-  long endTime = millis() + timeoutMs;
-
-  while (millis() < endTime) {
-    while (gsmSerial.available()) {
-      char c = gsmSerial.read();
-      Serial.write(c);
-    }
-  }
 }

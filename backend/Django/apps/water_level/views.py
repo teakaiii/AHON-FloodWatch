@@ -24,11 +24,11 @@ VALID_GSM_STATUSES = {'connected', 'disconnected', 'error'}
 
 
 def derive_status_from_analog(raw_value):
-    """Match the actual Arduino hardware thresholds: <300 Normal, 300-549 Warning, >=550 Danger."""
+    """Match the actual Arduino hardware thresholds: <300 Normal, 300-399 Warning, >=400 Danger."""
     raw_value = float(raw_value)
     if raw_value < 300:
         return 'Normal'
-    if raw_value < 550:
+    if raw_value < 400:
         return 'Warning'
     return 'Danger'
 
@@ -187,6 +187,7 @@ def water_level_root_create_view(request):
         timestamp = timezone.now()
 
     reading = WaterLevelReading.objects.create(
+        raw=int(sanitized['raw']) if sanitized.get('raw') is not None else None,
         water_level_cm=sanitized['water_level_cm'],
         status=sanitized['status'],
         timestamp=timestamp,
@@ -259,17 +260,23 @@ def latest_reading_api(request):
         if not reading:
             now = timezone.now()
             return Response({
+                'raw': None,
                 'water_level_cm': 0.0,
                 'status': 'Normal',
                 'sensor_status': 'offline',
-                'timestamp': now.strftime('%Y-%m-%d %H:%M:%S')
+                'gsm_status': 'disconnected',
+                'timestamp': now.isoformat(),
+                'source': 'no_sensor_data',
             }, status=status.HTTP_200_OK)
 
         return Response({
+            'raw': reading.raw,
             'water_level_cm': float(reading.water_level_cm),
             'status': reading.status,
             'sensor_status': reading.sensor_status,
-            'timestamp': reading.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            'gsm_status': reading.gsm_status,
+            'timestamp': reading.timestamp.isoformat(),
+            'source': 'arduino_upload' if not reading.firebase_synced else 'firebase_sensor',
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response(

@@ -118,11 +118,12 @@ const Dashboard = () => {
         const response = await api.get('/api/water-level/latest/')
         const latest = response.data
         const liveReading = {
+          raw: latest.raw == null ? null : Number(latest.raw),
           water_level_cm: Number(latest.water_level_cm),
           status: latest.status,
           sensor_status: latest.sensor_status,
+          gsm_status: latest.gsm_status,
           timestamp: latest.timestamp,
-          raw: latest.raw ?? Number(latest.water_level_cm),
         }
 
         setAlertHistory((prev) => {
@@ -359,6 +360,14 @@ const Dashboard = () => {
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 600 }}>
                     {dashboardData?.current_water_level?.water_level_cm || 0} cm
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Raw ADC: {dashboardData?.current_water_level?.raw ?? 'N/A'} | Sensor: {dashboardData?.current_water_level?.sensor_status || 'unknown'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Last Arduino update: {dashboardData?.current_water_level?.timestamp
+                      ? new Date(dashboardData.current_water_level.timestamp).toLocaleTimeString()
+                      : 'No reading'}
                   </Typography>
                   <Chip
                     label={dashboardData?.current_water_level?.status || 'Unknown'}

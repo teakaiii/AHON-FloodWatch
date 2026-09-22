@@ -156,7 +156,11 @@ def autodetect_port():
 
 
 # sketch_sep12a.ino prints "Current Sensor Value: 486" rather than JSON.
-RAW_LINE_RE = re.compile(r"Current Sensor Value:\s*(\d+)")
+RAW_LINE_RE = re.compile(
+    r"RAW\s*=\s*(\d+).*?CM\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*\|\s*STATUS\s*=\s*(Normal|Alert|Warning|Danger)",
+    re.IGNORECASE,
+)
+LEGACY_RAW_LINE_RE = re.compile(r"Current Sensor Value:\s*(\d+)")
 GSM_READY_RE = re.compile(r"GSM Module Ready")
 
 
@@ -180,8 +184,16 @@ def parse_line(line, cfg):
     # The plain-text sketch reports a raw ADC value; convert it here.
     match = RAW_LINE_RE.search(line)
     if match:
-        level = raw_to_cm(int(match.group(1)), cfg.raw_dry, cfg.raw_full, cfg.span_cm)
-        return build_reading(level, derive_status(level), "online", cfg)
+        raw = int(match.group(1))
+        level = round(float(match.group(2)), 2)
+        status = match.group(3).title()
+        return build_reading(level, status, "online", cfg, raw=raw)
+
+    legacy_match = LEGACY_RAW_LINE_RE.search(line)
+    if legacy_match:
+        raw = int(legacy_match.group(1))
+        level = raw_to_cm(raw, cfg.raw_dry, cfg.raw_full, cfg.span_cm)
+        return build_reading(level, derive_status_from_raw(raw), "online", cfg, raw=raw)
 
     if not line.startswith("{"):
         # Status banners and boot noise are expected; ignore them quietly.
@@ -215,21 +227,32 @@ def parse_line(line, cfg):
     if sensor_status not in VALID_SENSOR_STATUSES:
         sensor_status = "online"
 
-    return build_reading(level, status, sensor_status, cfg)
+    return build_reading(level, status, sensor_status, cfg, raw=data.get("raw"))
 
 
-def build_reading(level, status, sensor_status, cfg):
-    return {
+def build_reading(level, status, sensor_status, cfg, raw=None):
+    reading = {
         "water_level_cm": level,
         "status": status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "sensor_status": sensor_status,
         "gsm_status": cfg.gsm_status,
     }
+    if raw is not None:
+        reading["raw"] = int(raw)
+    return reading
 
 
 # Matches the actual Arduino hardware thresholds used in the field.
-def derive_status(level, warning=300.0, danger=550.0):
+def derive_status_from_raw(raw, warning=300, danger=400):
+    if raw >= danger:
+        return "Danger"
+    if raw >= warning:
+        return "Warning"
+    return "Normal"
+
+
+def derive_status(level, warning=30.0, danger=40.0):
     if level >= danger:
         return "Danger"
     if level >= warning:

@@ -1,6 +1,6 @@
 /*
  * AHON FloodWatch - Arduino Firmware (Memory-Optimized)
- * Corrected for SIM900/SIM800 GSM module stability & HTTP ngrok delivery.
+ * Fixed for SIM900/SIM800 GSM module stability & HTTP tunnel delivery.
  */
 
 #include <SoftwareSerial.h>
@@ -35,7 +35,7 @@ const float MAX_CM = 100.0;
 // ----------------------
 // Timing
 // ----------------------
-const unsigned long READ_INTERVAL_MS = 10000; // Increased to 10s for stability
+const unsigned long READ_INTERVAL_MS = 10000;
 const unsigned long SMS_COOLDOWN_MS  = 60000;
 const unsigned long GPRS_RETRY_INTERVAL_MS = 30000;
 
@@ -166,7 +166,7 @@ void setupGPRS() {
   sendATCommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"", 2000);
   sendATCommand("AT+SAPBR=3,1,\"APN\",\"internet\"", 2000);
   sendATCommand("AT+SAPBR=1,1", 5000);
-  
+
   String ipRes = sendATCommand("AT+SAPBR=2,1", 3000);
 
   if (ipRes.indexOf("+SAPBR: 1,1") != -1) {
@@ -200,6 +200,9 @@ void sendHTTPData(int rawValue, float waterLevelCm, const char* status) {
   sendATCommand("AT+HTTPINIT", 2000);
   sendATCommand("AT+HTTPPARA=\"CID\",1", 2000);
   sendATCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 2000);
+  
+  sendATCommand("AT+HTTPPARA=\"USERDATA\",\"ngrok-skip-browser-warning: true\"", 2000);
+  sendATCommand("AT+HTTPPARA=\"REDIR\",1", 2000);
 
   String urlCmd = "AT+HTTPPARA=\"URL\",\"";
   urlCmd += SERVER_URL;
@@ -214,7 +217,8 @@ void sendHTTPData(int rawValue, float waterLevelCm, const char* status) {
   if (dataRes.indexOf("DOWNLOAD") != -1) {
     gsmSerial.print(payload);
     delay(1000);
-    sendATCommand("AT+HTTPACTION=1", 10000);
+    // Taasan ang timeout to 15 seconds for LocalTunnel response
+    sendATCommand("AT+HTTPACTION=1", 15000);
     sendATCommand("AT+HTTPREAD", 3000);
   } else {
     Serial.println(F("Failed to prepare HTTPDATA buffer."));

@@ -23,13 +23,13 @@ const WaterLevel = () => {
   useEffect(() => {
     fetchCurrentLevel()
 
-    const interval = setInterval(fetchCurrentLevel, 10000)
+    const interval = setInterval(fetchCurrentLevel, 5000)
     return () => clearInterval(interval)
   }, [])
 
   const fetchCurrentLevel = async () => {
     try {
-      const response = await api.get('/api/water-level/current/')
+      const response = await api.get('/api/water-level/latest/')
       setCurrentLevel(response.data)
       setError(null)
     } catch (err) {
@@ -80,7 +80,7 @@ const WaterLevel = () => {
   // Reflects the sensor only. GSM is reported separately below, and is legitimately
   // disconnected on a USB-tethered setup where the sensor itself is fine.
   const sensorIsOnline = currentLevel?.sensor_status === 'online'
-  const isLive = currentLevel?.source === 'firebase_sensor'
+  const isLive = currentLevel?.is_live === true
 
   if (loading) {
     return (
@@ -134,13 +134,16 @@ const WaterLevel = () => {
                       Timestamp: {new Date(currentLevel.timestamp).toLocaleString()}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
+                      Raw ADC: {currentLevel.raw ?? 'N/A'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
                       Sensor Status: {currentLevel.sensor_status}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       GSM Status: {currentLevel.gsm_status}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Source: {isLive ? 'Live sensor via Firebase' : 'Stored database reading'}
+                      Source: {isLive ? 'Live Arduino upload' : 'Waiting for Arduino upload'}
                     </Typography>
                   </Box>
                 </>

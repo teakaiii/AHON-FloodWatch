@@ -20,10 +20,9 @@ SoftwareSerial gsmSerial(7, 8);
 
 // ----------------------
 // Backend URL
-// IMPORTANT: use your public ngrok URL or the PC's LAN IP.
-// "localhost" is invalid for a GSM modem because it points to the modem itself.
+// Use your deployed Render backend URL with the actual API route.
 // ----------------------
-const String SERVER_URL = "http://aptitude-unpopular-demotion.ngrok-free.dev/api/water-level/";
+const String SERVER_URL = "https://ahon-floodwatch-backend.onrender.com/api/water-level/";
 String RECIPIENT_PHONE = "+639077650549";
 
 // ----------------------

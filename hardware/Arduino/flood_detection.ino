@@ -76,6 +76,7 @@ void setup() {
   Serial.println(F("===================================="));
   Serial.println(F("AHON FloodWatch - Arduino Sensor"));
   Serial.println(F("===================================="));
+  Serial.println(F("Status: <30cm Normal | 30-59.99cm Warning | >=60cm Danger"));
 
   delay(2000);
   initGSM();

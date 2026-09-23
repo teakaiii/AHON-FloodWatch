@@ -238,16 +238,22 @@ def parse_line(line, cfg):
         logger.warning("Ignoring out-of-range water level: %s", level)
         return None
 
-    status = data.get("status")
+    raw = data.get("raw")
+    try:
+        raw = int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        raw = None
+
+    # Raw ADC is the hardware source of truth and must match the LED thresholds.
+    status = derive_status_from_raw(raw) if raw is not None else data.get("status")
     if status not in VALID_STATUSES:
-        # The API requires status, so derive it rather than letting the POST 400.
         status = derive_status(level)
 
     sensor_status = data.get("sensor_status")
     if sensor_status not in VALID_SENSOR_STATUSES:
         sensor_status = "online"
 
-    return build_reading(level, status, sensor_status, cfg, raw=data.get("raw"))
+    return build_reading(level, status, sensor_status, cfg, raw=raw)
 
 
 def build_reading(level, status, sensor_status, cfg, raw=None):

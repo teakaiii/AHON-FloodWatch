@@ -65,12 +65,11 @@ class WaterLevelReading(models.Model):
         except (TypeError, ValueError):
             return 'Normal'
 
-        if value >= 400:
+        water_level_cm = max(0.0, min(100.0, value / 1023.0 * 100.0)) if value > 100 else value
+        if water_level_cm >= 60:
             return 'Danger'
-        if value >= 300:
+        if water_level_cm >= 30:
             return 'Warning'
-        if value >= 200 and value < 300:
-            return 'Normal'
 
         if value >= settings.DANGER_THRESHOLD:
             return 'Danger'

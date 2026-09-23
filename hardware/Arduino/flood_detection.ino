@@ -26,10 +26,10 @@ const char SERVER_URL[] = "http://aptitude-unpopular-demotion.ngrok-free.dev/api
 const char RECIPIENT_PHONE[] = "+639077650549";
 
 // ----------------------
-// Thresholds (RAW ADC values)
+// Thresholds (converted water level)
 // ----------------------
-const int THRESHOLD_WARNING = 300;
-const int THRESHOLD_DANGER = 400;
+const float THRESHOLD_WARNING_CM = 30.0;
+const float THRESHOLD_DANGER_CM = 60.0;
 const float MAX_CM = 100.0;
 
 // ----------------------
@@ -49,10 +49,10 @@ float rawToCm(int rawValue) {
   return (rawValue / 1023.0) * MAX_CM;
 }
 
-const char* determineStatusFromRaw(int rawValue) {
-  if (rawValue < THRESHOLD_WARNING) {
+const char* determineStatusFromWaterLevel(float waterLevelCm) {
+  if (waterLevelCm < THRESHOLD_WARNING_CM) {
     return "Normal";
-  } else if (rawValue < THRESHOLD_DANGER) {
+  } else if (waterLevelCm < THRESHOLD_DANGER_CM) {
     return "Warning";
   } else {
     return "Danger";
@@ -96,7 +96,7 @@ void loop() {
 
     int rawValue = analogRead(SENSOR_PIN);
     float waterLevelCm = rawToCm(rawValue);
-    const char* status = determineStatusFromRaw(rawValue);
+    const char* status = determineStatusFromWaterLevel(waterLevelCm);
 
     Serial.print(F("RAW="));
     Serial.print(rawValue);
@@ -105,7 +105,7 @@ void loop() {
     Serial.print(F(" | STATUS="));
     Serial.println(status);
 
-    updateStatusLeds(rawValue);
+    updateStatusLeds(waterLevelCm);
 
     // SMS Alert Logic
     if ((strcmp(status, "Warning") == 0 || strcmp(status, "Danger") == 0) &&
@@ -135,10 +135,10 @@ void writeLed(int pin, bool on) {
   digitalWrite(pin, outputHigh ? HIGH : LOW);
 }
 
-void updateStatusLeds(int rawValue) {
-  writeLed(LED_GREEN, rawValue < THRESHOLD_WARNING);
-  writeLed(LED_YELLOW, rawValue >= THRESHOLD_WARNING && rawValue < THRESHOLD_DANGER);
-  writeLed(LED_RED, rawValue >= THRESHOLD_DANGER);
+void updateStatusLeds(float waterLevelCm) {
+  writeLed(LED_GREEN, waterLevelCm < THRESHOLD_WARNING_CM);
+  writeLed(LED_YELLOW, waterLevelCm >= THRESHOLD_WARNING_CM && waterLevelCm < THRESHOLD_DANGER_CM);
+  writeLed(LED_RED, waterLevelCm >= THRESHOLD_DANGER_CM);
 }
 
 void testLeds() {

@@ -206,14 +206,14 @@ def parse_line(line, cfg):
     if match:
         raw = int(match.group(1))
         level = round(float(match.group(2)), 2)
-        status = derive_status_from_raw(raw)
+        status = derive_status(level)
         return build_reading(level, status, "online", cfg, raw=raw)
 
     legacy_match = LEGACY_RAW_LINE_RE.search(line)
     if legacy_match:
         raw = int(legacy_match.group(1))
         level = raw_to_cm(raw, cfg.raw_dry, cfg.raw_full, cfg.span_cm)
-        return build_reading(level, derive_status_from_raw(raw), "online", cfg, raw=raw)
+        return build_reading(level, derive_status(level), "online", cfg, raw=raw)
 
     if not line.startswith("{"):
         # Status banners and boot noise are expected; ignore them quietly.
@@ -245,7 +245,7 @@ def parse_line(line, cfg):
         raw = None
 
     # Raw ADC is the hardware source of truth and must match the LED thresholds.
-    status = derive_status_from_raw(raw) if raw is not None else data.get("status")
+    status = derive_status(level) if raw is not None else data.get("status")
     if status not in VALID_STATUSES:
         status = derive_status(level)
 
@@ -270,7 +270,7 @@ def build_reading(level, status, sensor_status, cfg, raw=None):
 
 
 # Matches the actual Arduino hardware thresholds used in the field.
-def derive_status_from_raw(raw, warning=300, danger=400):
+def derive_status_from_raw(raw, warning=30, danger=60):
     if raw >= danger:
         return "Danger"
     if raw >= warning:
@@ -278,7 +278,7 @@ def derive_status_from_raw(raw, warning=300, danger=400):
     return "Normal"
 
 
-def derive_status(level, warning=30.0, danger=40.0):
+def derive_status(level, warning=30.0, danger=60.0):
     if level >= danger:
         return "Danger"
     if level >= warning:

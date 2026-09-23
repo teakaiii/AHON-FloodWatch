@@ -29,11 +29,11 @@ RENDER_SENSOR_ENDPOINT = 'https://ahon-floodwatch-backend.onrender.com/api/water
 
 
 def derive_status_from_analog(raw_value):
-    """Match the actual Arduino hardware thresholds: <300 Normal, 300-399 Warning, >=400 Danger."""
-    raw_value = float(raw_value)
-    if raw_value < 300:
+    """Derive status from the converted 0-100 cm sensor range."""
+    water_level_cm = max(0.0, min(100.0, float(raw_value) / 1023.0 * 100.0))
+    if water_level_cm < 30.0:
         return 'Normal'
-    if raw_value < 400:
+    if water_level_cm < 60.0:
         return 'Warning'
     return 'Danger'
 

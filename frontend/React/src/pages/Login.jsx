@@ -7,13 +7,18 @@ import {
   Typography,
   Alert,
   CircularProgress,
+  InputAdornment,
+  IconButton,
+  Tooltip,
 } from '@mui/material'
+import { Visibility, VisibilityOff } from '@mui/icons-material'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 
 const Login = () => {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -88,20 +93,23 @@ const Login = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1.5 }}>
             <Box
               sx={{
-                width: 74,
-                height: 74,
-                borderRadius: '50%',
-                background: '#0e2d4d',
-                color: '#fff',
+                width: 86,
+                height: 86,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: 700,
-                fontSize: 26,
-                border: '4px solid #dfe9f2',
               }}
             >
-              A
+              <Box
+                component="img"
+                src="/logo.png"
+                alt="AHON FloodWatch logo"
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                }}
+              />
             </Box>
           </Box>
 
@@ -177,12 +185,29 @@ const Login = () => {
                 required
                 fullWidth
                 name="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 id="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Tooltip title={showPassword ? 'Hide password' : 'Show password'}>
+                        <IconButton
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          onClick={() => setShowPassword((visible) => !visible)}
+                          onMouseDown={(e) => e.preventDefault()}
+                          edge="end"
+                          disabled={loading}
+                        >
+                          {showPassword ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ),
+                }}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     background: '#edf3fa',

@@ -35,7 +35,7 @@ const float MAX_CM = 100.0;
 // ----------------------
 // Timing
 // ----------------------
-const unsigned long READ_INTERVAL_MS = 10000;
+const unsigned long READ_INTERVAL_MS = 5000;
 const unsigned long SMS_COOLDOWN_MS  = 60000;
 const unsigned long GPRS_RETRY_INTERVAL_MS = 30000;
 

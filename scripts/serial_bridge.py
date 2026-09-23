@@ -206,7 +206,7 @@ def parse_line(line, cfg):
     if match:
         raw = int(match.group(1))
         level = round(float(match.group(2)), 2)
-        status = match.group(3).title()
+        status = derive_status_from_raw(raw)
         return build_reading(level, status, "online", cfg, raw=raw)
 
     legacy_match = LEGACY_RAW_LINE_RE.search(line)

@@ -26,15 +26,10 @@ import {
   TrendingUp,
   CheckCircle,
   Error,
-  Info,
   Download,
 } from '@mui/icons-material'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import api from '../services/api'
-import WeatherForecastWidget from '../components/WeatherForecastWidget'
-import WeatherTrends from '../components/WeatherTrends'
-import RainAnimation from '../components/RainAnimation'
-import { fetchWeatherForecast } from '../services/weather'
 
 const Dashboard = () => {
   console.log('Dashboard component mounting...')
@@ -42,8 +37,6 @@ const Dashboard = () => {
   const [error, setError] = useState(null)
   const [dashboardData, setDashboardData] = useState(null)
   const [waterLevelTrend, setWaterLevelTrend] = useState([])
-  const [weatherData, setWeatherData] = useState(null)
-  const [isRaining, setIsRaining] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [alertHistory, setAlertHistory] = useState([])
 
@@ -77,13 +70,11 @@ const Dashboard = () => {
     console.log('Dashboard useEffect triggered')
     fetchDashboardData()
     fetchWaterLevelTrend()
-    fetchWeatherData()
     
     // Refresh data every 30 seconds
     const interval = setInterval(() => {
       fetchDashboardData()
       fetchWaterLevelTrend()
-      fetchWeatherData()
     }, 30000)
     
     return () => clearInterval(interval)
@@ -219,34 +210,6 @@ const Dashboard = () => {
       setWaterLevelTrend(formattedData)
     } catch (err) {
       console.error('Failed to fetch water level trend:', err)
-    }
-  }
-
-  const fetchWeatherData = async () => {
-    try {
-      const data = await fetchWeatherForecast()
-      setWeatherData(data)
-      // Accurate rain detection based on WMO weather codes and precipitation
-      // Drizzle: 51-57, Rain: 61-67, Rain showers: 80-82, Thunderstorm: 95-99
-      const rainWeatherCodes = [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]
-      const isRainingByCode = rainWeatherCodes.includes(data.current.weatherCode)
-      const isRainingByPrecipitation = data.current.rain > 0 || data.current.precipitation > 0
-      
-      // Only show rain animation if actually raining (either by code or active precipitation)
-      const actuallyRaining = isRainingByCode || isRainingByPrecipitation
-      setIsRaining(actuallyRaining)
-      
-      console.log('Rain detection:', {
-        weatherCode: data.current.weatherCode,
-        rain: data.current.rain,
-        precipitation: data.current.precipitation,
-        isRainingByCode,
-        isRainingByPrecipitation,
-        actuallyRaining
-      })
-    } catch (err) {
-      console.error('Failed to fetch weather data:', err)
-      setIsRaining(false)
     }
   }
 
@@ -546,48 +509,48 @@ const Dashboard = () => {
           </Card>
         </Grid>
 
-        {/* AI Prediction - Center Right */}
+        {/* Decision support */}
         <Grid item xs={12} md={4}>
           <Card sx={{ borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)', height: '100%' }}>
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                AI Flood Prediction
+                Decision Support
               </Typography>
-              <Box sx={{ mt: 3 }}>
+              {dashboardData?.prediction ? <Box sx={{ mt: 2 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                  Flood Probability
+                  Current risk assessment
                 </Typography>
                 <Typography variant="h3" sx={{ mt: 2, fontWeight: 700, color: '#1976d2' }}>
-                  {dashboardData?.prediction?.flood_probability || 0}%
+                  {dashboardData.prediction.flood_probability}%
                 </Typography>
                 <Chip
-                  label={dashboardData?.prediction?.severity || 'Unknown'}
-                  color={getStatusColor(dashboardData?.prediction?.alert_level)}
+                  label={dashboardData.prediction.alert_level}
+                  color={getStatusColor(dashboardData.prediction.alert_level)}
                   size="small"
                   sx={{ mt: 2, height: 28, fontWeight: 600 }}
                 />
                 <Box sx={{ mt: 3 }}>
                   <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <span>Confidence:</span>
-                    <span style={{ fontWeight: 600 }}>{dashboardData?.prediction?.confidence || 0}%</span>
+                    <span style={{ fontWeight: 600 }}>{dashboardData.prediction.confidence}%</span>
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Alert Level:</span>
-                    <span style={{ fontWeight: 600 }}>{dashboardData?.prediction?.alert_level || 'Unknown'}</span>
+                    <span>Trend:</span>
+                    <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{dashboardData.prediction.trend_direction}</span>
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 2, fontWeight: 600 }}>
+                    {dashboardData.prediction.recommended_action}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                    Based on live threshold and recent sensor trend. This is decision support, not a guaranteed forecast.
                   </Typography>
                 </Box>
-              </Box>
+              </Box> : <Alert severity="info" sx={{ mt: 2 }}>Waiting for a live sensor reading.</Alert>}
             </CardContent>
           </Card>
         </Grid>
 
-        {/* BOTTOM ROW - Weather and System at bottom intersections */}
-        {/* Weather & Flood Outlook - Bottom Left */}
-        <Grid item xs={12} md={8}>
-          <WeatherForecastWidget />
-        </Grid>
-
-        {/* System Status - Bottom Right (Compact) */}
+        {/* System Status */}
         <Grid item xs={12} md={4}>
           <Card sx={{ borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)', height: '100%' }}>
             <CardContent sx={{ p: 2.5 }}>
@@ -641,33 +604,6 @@ const Dashboard = () => {
           </Card>
         </Grid>
 
-        {/* Rain Animation - only shown when actually raining */}
-        {isRaining && (
-          <Grid item xs={12}>
-            <Card sx={{ borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)', background: 'linear-gradient(to bottom, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))' }}>
-              <CardContent sx={{ position: 'relative', minHeight: '180px', p: 3 }}>
-                <Box sx={{ position: 'relative', zIndex: 1 }}>
-                  <Typography variant="h6" gutterBottom sx={{ color: 'white', fontWeight: 600 }}>
-                    Current Weather: Raining
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', fontWeight: 500 }}>
-                    Precipitation: {weatherData?.current?.rain?.toFixed(1)} mm | 
-                    Code: {weatherData?.current?.weatherCode} ({weatherData?.current?.description})
-                  </Typography>
-                </Box>
-                <RainAnimation 
-                  intensity={weatherData?.current?.rain > 5 ? 'heavy' : weatherData?.current?.rain > 2 ? 'medium' : 'light'} 
-                  size="full" 
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-
-        {/* Weather Trends - Full width at bottom */}
-        <Grid item xs={12}>
-          <WeatherTrends />
-        </Grid>
       </Grid>
     </Box>
   )

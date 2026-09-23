@@ -26,15 +26,9 @@ def dashboard_overview_view(request):
     # Current water level
     current_reading = WaterLevelReading.objects.order_by('-timestamp').first()
     
-    # If no data exists, create sample data for demonstration
-    if not current_reading:
-        current_reading = WaterLevelReading.objects.create(
-            water_level_cm=15.5,
-            status='Normal',
-            sensor_status='online',
-            gsm_status='connected',
-            timestamp=timezone.now()
-        )
+    recent_readings = list(
+        WaterLevelReading.objects.order_by('-timestamp')[:12]
+    )
     
     # Active alerts
     active_alerts = FloodAlert.objects.filter(is_active=True).count()
@@ -72,18 +66,34 @@ def dashboard_overview_view(request):
         delivery_status='failed'
     ).count()
     
-    # Latest prediction
-    latest_prediction = Prediction.objects.order_by('-timestamp').first()
-    if not latest_prediction:
-        from apps.predictions.models import Prediction
-        latest_prediction = Prediction.objects.create(
-            reading=current_reading,
-            flood_probability=25.5,
-            severity='low',
-            alert_level='Normal',
-            confidence_score=85.0,
-            timestamp=timezone.now()
-        )
+    # Transparent live decision support. Do not manufacture an AI prediction
+    # when no real sensor reading exists.
+    live_prediction = None
+    if current_reading:
+        current_level = float(current_reading.water_level_cm)
+        oldest_recent = recent_readings[-1] if recent_readings else current_reading
+        trend_delta = round(current_level - float(oldest_recent.water_level_cm), 2)
+        trend_direction = 'rising' if trend_delta > 0.5 else 'falling' if trend_delta < -0.5 else 'stable'
+        status = current_reading.status
+        probability_by_status = {'Normal': 10.0, 'Alert': 35.0, 'Warning': 65.0, 'Danger': 95.0}
+        severity_by_status = {'Normal': 'low', 'Alert': 'medium', 'Warning': 'high', 'Danger': 'critical'}
+        action_by_status = {
+            'Normal': 'Continue routine monitoring.',
+            'Alert': 'Increase monitoring frequency and verify the sensor.',
+            'Warning': 'Prepare residents and verify evacuation readiness.',
+            'Danger': 'Initiate emergency response and evacuation procedures.',
+        }
+        live_prediction = {
+            'flood_probability': probability_by_status.get(status, 0.0),
+            'severity': severity_by_status.get(status, 'unknown'),
+            'alert_level': status,
+            'confidence': 100.0 if current_reading.raw is not None else 70.0,
+            'recommended_action': action_by_status.get(status, 'Review the latest sensor reading.'),
+            'trend_direction': trend_direction,
+            'trend_delta_cm': trend_delta,
+            'basis': 'Live water level threshold and recent sensor trend',
+            'timestamp': current_reading.timestamp,
+        }
     
     # Get system status
     from django.conf import settings as django_settings
@@ -101,13 +111,13 @@ def dashboard_overview_view(request):
 
     data = {
         'current_water_level': {
-            'raw': current_reading.raw,
+            'raw': current_reading.raw if current_reading else None,
             'water_level_cm': float(current_reading.water_level_cm) if current_reading else 0,
             'status': current_reading.status if current_reading else 'No Data',
             'timestamp': current_reading.timestamp if current_reading else None,
             'sensor_status': current_reading.sensor_status if current_reading else 'unknown',
             'gsm_status': current_reading.gsm_status if current_reading else 'unknown',
-            'source': 'arduino_upload' if current_reading and not current_reading.firebase_synced else 'firebase_sensor',
+            'source': 'arduino_upload' if current_reading and not current_reading.firebase_synced else 'firebase_sensor' if current_reading else 'no_sensor_data',
             'age_seconds': reading_age_seconds,
             'is_live': bool(current_reading and current_reading.sensor_status == 'online' and reading_age_seconds <= 30),
         },
@@ -126,12 +136,7 @@ def dashboard_overview_view(request):
             'sent_last_24h': sms_sent,
             'failed_last_24h': sms_failed
         },
-        'prediction': {
-            'flood_probability': float(latest_prediction.flood_probability) if latest_prediction else 0,
-            'severity': latest_prediction.severity if latest_prediction else 'unknown',
-            'alert_level': latest_prediction.alert_level if latest_prediction else 'unknown',
-            'confidence': float(latest_prediction.confidence_score) if latest_prediction else 0
-        },
+        'prediction': live_prediction,
         'system_status': system_status
     }
     
